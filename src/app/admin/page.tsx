@@ -889,7 +889,7 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
         throw err;
       }
     });
-  };;
+  };
 
   // 通用请求函数
   const handleUserAction = async (

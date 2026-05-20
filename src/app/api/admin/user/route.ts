@@ -469,7 +469,7 @@ export async function POST(request: NextRequest) {
         }
 
         break;
-
+      }
 
       case 'updateUserValidPeriod': {
         if (!targetEntry) {

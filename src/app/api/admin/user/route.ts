@@ -21,6 +21,7 @@ const ACTIONS = [
   'userGroup',
   'updateUserGroups',
   'batchUpdateUserGroups',
+  'updateUserValidPeriod',
 ] as const;
 
 export async function POST(request: NextRequest) {
@@ -58,7 +59,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 用户组操作和批量操作不需要targetUsername
-    if (!targetUsername && !['userGroup', 'batchUpdateUserGroups'].includes(action)) {
+    if (!targetUsername && !['userGroup', 'batchUpdateUserGroups', 'updateUserValidPeriod'].includes(action)) {
       return NextResponse.json({ error: '缺少目标用户名' }, { status: 400 });
     }
 
@@ -98,7 +99,7 @@ export async function POST(request: NextRequest) {
     let targetEntry: any = null;
     let isTargetAdmin = false;
 
-    if (!['userGroup', 'batchUpdateUserGroups'].includes(action) && targetUsername) {
+    if (!['userGroup', 'batchUpdateUserGroups', 'updateUserValidPeriod'].includes(action) && targetUsername) {
       targetEntry = adminConfig.UserConfig.Users.find(
         (u) => u.username === targetUsername
       );
@@ -106,7 +107,7 @@ export async function POST(request: NextRequest) {
       if (
         targetEntry &&
         targetEntry.role === 'owner' &&
-        !['changePassword', 'updateUserApis', 'updateUserGroups'].includes(action)
+        !['changePassword', 'updateUserApis', 'updateUserGroups', 'updateUserValidPeriod'].includes(action)
       ) {
         return NextResponse.json({ error: '无法操作站长' }, { status: 400 });
       }
@@ -468,7 +469,52 @@ export async function POST(request: NextRequest) {
         }
 
         break;
-      }
+
+
+      case 'updateUserValidPeriod': {
+        if (!targetEntry) {
+          return NextResponse.json(
+            { error: '目标用户不存在' },
+            { status: 404 }
+          );
+        }
+
+        const { validFrom, validUntil } = body as {
+          validFrom?: number | null;
+          validUntil?: number | null;
+        };
+
+        // 权限检查：站长可配置所有人的有效期，管理员可配置普通用户和自己的有效期
+        if (
+          isTargetAdmin &&
+          operatorRole !== 'owner' &&
+          username !== targetUsername
+        ) {
+          return NextResponse.json(
+            { error: '仅站长可配置其他管理员的有效期' },
+            { status: 401 }
+          );
+        }
+
+        // 更新用户的有效期
+        if (validFrom !== undefined) {
+          if (validFrom === null) {
+            delete targetEntry.validFrom;
+          } else {
+            targetEntry.validFrom = validFrom;
+          }
+        }
+
+        if (validUntil !== undefined) {
+          if (validUntil === null) {
+            delete targetEntry.validUntil;
+          } else {
+            targetEntry.validUntil = validUntil;
+          }
+        }
+
+        break;
+      }      }
       default:
         return NextResponse.json({ error: '未知操作' }, { status: 400 });
     }

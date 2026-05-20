@@ -139,6 +139,17 @@ export async function POST(req: NextRequest) {
       username === process.env.USERNAME &&
       password === process.env.PASSWORD
     ) {
+      // 站长也做时间窗口校验
+      const config = await getConfig();
+      const ownerUser = config.UserConfig.Users.find((u) => u.username === username);
+      const now = Date.now();
+      if (ownerUser?.validFrom && now < ownerUser.validFrom) {
+        return NextResponse.json({ error: '账号尚未生效，有效期从 ' + new Date(ownerUser.validFrom).toLocaleString('zh-CN') + ' 开始' }, { status: 401 });
+      }
+      if (ownerUser?.validUntil && now > ownerUser.validUntil) {
+        return NextResponse.json({ error: '账号已过期，到期时间 ' + new Date(ownerUser.validUntil).toLocaleString('zh-CN') }, { status: 401 });
+      }
+
       // 验证成功，设置认证cookie
       const response = NextResponse.json({ ok: true });
       const cookieValue = await generateAuthCookie(
@@ -167,6 +178,15 @@ export async function POST(req: NextRequest) {
     const user = config.UserConfig.Users.find((u) => u.username === username);
     if (user && user.banned) {
       return NextResponse.json({ error: '用户被封禁' }, { status: 401 });
+    }
+
+    // 时间窗口校验
+    const now = Date.now();
+    if (user?.validFrom && now < user.validFrom) {
+      return NextResponse.json({ error: '账号尚未生效，有效期从 ' + new Date(user.validFrom).toLocaleString('zh-CN') + ' 开始' }, { status: 401 });
+    }
+    if (user?.validUntil && now > user.validUntil) {
+      return NextResponse.json({ error: '账号已过期，到期时间 ' + new Date(user.validUntil).toLocaleString('zh-CN') }, { status: 401 });
     }
 
     // 校验用户密码（V1）

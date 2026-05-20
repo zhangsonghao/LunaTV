@@ -43,6 +43,8 @@ export interface AdminConfig {
       tvboxToken?: string; // 用户专属的 TVBox Token
       tvboxEnabledSources?: string[]; // TVBox 可访问的源（为空则返回所有源）
       showAdultContent?: boolean; // 用户级别的成人内容显示控制
+      validFrom?: number; // 账号生效时间戳（毫秒），不设置=立即生效
+      validUntil?: number; // 账号失效时间戳（毫秒），不设置=永不过期
       oidcSub?: string; // OIDC的唯一标识符(sub字段)
       embyConfig?: {
         sources: Array<{

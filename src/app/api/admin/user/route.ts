@@ -514,7 +514,8 @@ export async function POST(request: NextRequest) {
         }
 
         break;
-      }      }
+      }
+
       default:
         return NextResponse.json({ error: '未知操作' }, { status: 400 });
     }

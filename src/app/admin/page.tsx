@@ -8456,8 +8456,6 @@ function AdminPageClient() {
         document.body
       )}
 
-document.body
-      )}
     </PageLayout>
   );
 }

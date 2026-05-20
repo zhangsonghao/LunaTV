@@ -450,6 +450,8 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
     enabledApis?: string[];
     tags?: string[];
     showAdultContent?: boolean;
+    validFrom?: number;
+    validUntil?: number;
   } | null>(null);
   const [selectedApis, setSelectedApis] = useState<string[]>([]);
   const [selectedShowAdultContent, setSelectedShowAdultContent] = useState<boolean>(false);
@@ -484,6 +486,17 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
     tvboxEnabledSources?: string[];
   } | null>(null);
   const [selectedTVBoxSources, setSelectedTVBoxSources] = useState<string[]>([]);
+
+  // 账号有效期管理状态
+  const [showUserValidPeriodModal, setShowUserValidPeriodModal] = useState(false);
+  const [validPeriodUser, setValidPeriodUser] = useState<{
+    username: string;
+    role: 'user' | 'admin' | 'owner';
+    validFrom?: number;
+    validUntil?: number;
+  } | null>(null);
+  const [editValidFrom, setEditValidFrom] = useState<string>('');
+  const [editValidUntil, setEditValidUntil] = useState<string>('');
 
   // 当前登录用户名
   const currentUsername = getAuthInfoFromBrowserCookie()?.username || null;
@@ -829,7 +842,54 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
         throw err;
       }
     });
+  }
+
+  const handleConfigureUserValidPeriod = (user: {
+    username: string;
+    role: 'user' | 'admin' | 'owner';
+    validFrom?: number;
+    validUntil?: number;
+  }) => {
+    setValidPeriodUser(user);
+    // Convert timestamp to datetime-local format
+    setEditValidFrom(user.validFrom ? new Date(user.validFrom).toISOString().slice(0, 16) : '');
+    setEditValidUntil(user.validUntil ? new Date(user.validUntil).toISOString().slice(0, 16) : '');
+    setShowUserValidPeriodModal(true);
   };
+
+  const handleSaveUserValidPeriod = async () => {
+    if (!validPeriodUser) return;
+
+    await withLoading(`saveUserValidPeriod_${validPeriodUser.username}`, async () => {
+      try {
+        const validFrom = editValidFrom ? new Date(editValidFrom).getTime() : null;
+        const validUntil = editValidUntil ? new Date(editValidUntil).getTime() : null;
+
+        const res = await fetch('/api/admin/user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            targetUsername: validPeriodUser.username,
+            action: 'updateUserValidPeriod',
+            validFrom,
+            validUntil,
+          }),
+        });
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || `操作失败: ${res.status}`);
+        }
+
+        await refreshConfig();
+        setShowUserValidPeriodModal(false);
+        setValidPeriodUser(null);
+      } catch (err) {
+        showError(err instanceof Error ? err.message : '操作失败', showAlert);
+        throw err;
+      }
+    });
+  };;
 
   // 通用请求函数
   const handleUserAction = async (
@@ -1782,6 +1842,33 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
                                     setSelectedTVBoxSources(user.tvboxEnabledSources || []);
                                     setShowTVBoxTokenModal(true);
                                   }}
+                                  className={buttonStyles.roundedPrimary}
+                                >
+                                  配置
+                                </button>
+                              )}
+                          </div>
+                        </td>
+                        {/* 账号有效期列 */}
+                        <td className='px-6 py-4 whitespace-nowrap'>
+                          <div className='flex items-center space-x-2'>
+                            <span className='text-sm text-gray-900 dark:text-gray-100'>
+                              {user.validFrom || user.validUntil ? (
+                                <>
+                                  {user.validFrom ? new Date(user.validFrom).toLocaleString('zh-CN', {year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—'}
+                                  {' ~ '}
+                                  {user.validUntil ? new Date(user.validUntil).toLocaleString('zh-CN', {year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—'}
+                                </>
+                              ) : (
+                                '永久有效'
+                              )}
+                            </span>
+                            {(role === 'owner' ||
+                              (role === 'admin' &&
+                                (user.role === 'user' ||
+                                  user.username === currentUsername))) && (
+                                <button
+                                  onClick={() => handleConfigureUserValidPeriod(user)}
                                   className={buttonStyles.roundedPrimary}
                                 >
                                   配置
@@ -8270,7 +8357,106 @@ function AdminPageClient() {
             </div>
           </div>
         </div>,
+        
+
+      {/* 配置用户有效期弹窗 */}
+      {showUserValidPeriodModal && validPeriodUser && createPortal(
+        <div className='fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4' onClick={() => {
+          setShowUserValidPeriodModal(false);
+          setValidPeriodUser(null);
+        }}>
+          <div className='bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-lg w-full' onClick={(e) => e.stopPropagation()}>
+            <div className='p-6'>
+              <div className='flex items-center justify-between mb-6'>
+                <h3 className='text-xl font-semibold text-gray-900 dark:text-gray-100'>
+                  配置账号有效期 - {validPeriodUser.username}
+                </h3>
+                <button
+                  onClick={() => {
+                    setShowUserValidPeriodModal(false);
+                    setValidPeriodUser(null);
+                  }}
+                  className='text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors'
+                >
+                  <svg className='w-6 h-6' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                    <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M6 18L18 6M6 6l12 12' />
+                  </svg>
+                </button>
+              </div>
+
+              <div className='mb-6'>
+                <div className='bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4'>
+                  <div className='flex items-center space-x-2 mb-2'>
+                    <svg className='w-5 h-5 text-amber-600 dark:text-amber-400' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                      <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' />
+                    </svg>
+                    <span className='text-sm font-medium text-amber-800 dark:text-amber-300'>
+                      时间设置说明
+                    </span>
+                  </div>
+                  <p className='text-sm text-amber-700 dark:text-amber-400 mt-1'>
+                    设置用户的登录有效期限。不设置表示永久有效。
+                  </p>
+                </div>
+              </div>
+
+              <div className='space-y-4'>
+                <div>
+                  <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
+                    生效时间（可选）
+                  </label>
+                  <input
+                    type='datetime-local'
+                    value={editValidFrom}
+                    onChange={(e) => setEditValidFrom(e.target.value)}
+                    className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
+                  />
+                  <p className='text-xs text-gray-500 dark:text-gray-400 mt-1'>
+                    留空表示立即生效
+                  </p>
+                </div>
+
+                <div>
+                  <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
+                    失效时间（可选）
+                  </label>
+                  <input
+                    type='datetime-local'
+                    value={editValidUntil}
+                    onChange={(e) => setEditValidUntil(e.target.value)}
+                    className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
+                  />
+                  <p className='text-xs text-gray-500 dark:text-gray-400 mt-1'>
+                    留空表示永不过期
+                  </p>
+                </div>
+              </div>
+
+              <div className='flex justify-end space-x-3 mt-6'>
+                <button
+                  onClick={() => {
+                    setShowUserValidPeriodModal(false);
+                    setValidPeriodUser(null);
+                  }}
+                  className='px-6 py-2.5 text-sm font-medium bg-gray-200 hover:bg-gray-300 text-gray-700 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-200 rounded-lg transition-colors'
+                >
+                  取消
+                </button>
+                <button
+                  onClick={handleSaveUserValidPeriod}
+                  disabled={isLoading(`saveUserValidPeriod_${validPeriodUser?.username}`)}
+                  className={`px-6 py-2.5 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors ${isLoading(`saveUserValidPeriod_${validPeriodUser?.username}`) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  {isLoading(`saveUserValidPeriod_${validPeriodUser?.username}`) ? '保存中...' : '保存'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>,
         document.body
+      )}
+
+document.body
       )}
     </PageLayout>
   );

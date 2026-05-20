@@ -8357,7 +8357,8 @@ function AdminPageClient() {
             </div>
           </div>
         </div>,
-        
+        document.body
+      )}
 
       {/* 配置用户有效期弹窗 */}
       {showUserValidPeriodModal && validPeriodUser && createPortal(
